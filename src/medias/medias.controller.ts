@@ -265,8 +265,10 @@ export class MediasController {
   }
 
   @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.mediasService.findById(id);
+  async findById(@Param('id') id: string) {
+    const media = await this.mediasService.findById(id);
+    if (!media) throw new NotFoundException('Media not found');
+    return media;
   }
 
   @Post()

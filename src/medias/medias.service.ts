@@ -5,6 +5,9 @@ import { NEON_CONNECTION } from '../database/database.module.js';
 
 export type MediaType = 'VIDEO' | 'H5P' | 'SCORM';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (id: string) => UUID.test(id);
+
 export interface CreateMediaInput {
 	title: string;
 	type: MediaType;
@@ -100,6 +103,7 @@ export class MediasService implements OnModuleInit {
 	}
 
 	async updateStatus(id: string, status: string) {
+		if (!isUuid(id)) return undefined;
 		const [media] = await this.sql`
 			UPDATE media
 			SET status = ${status}, updated_at = NOW()
@@ -140,6 +144,7 @@ export class MediasService implements OnModuleInit {
 	}
 
 	async remove(id: string) {
+		if (!isUuid(id)) return undefined;
 		const [media] = await this.sql`
 			DELETE FROM media WHERE id = ${id}
 			RETURNING id, type, provider, provider_id, cover_key
@@ -161,6 +166,8 @@ export class MediasService implements OnModuleInit {
 	}
 
 	async findById(id: string) {
+		// Not a UUID can't match a row; answer "not found" instead of a database error.
+		if (!isUuid(id)) return undefined;
 		const [media] = await this.sql`
 			SELECT id, title, type, provider, provider_id, status,
 			       original_filename, mime_type, size_bytes, cover_key, notes, created_at, updated_at
