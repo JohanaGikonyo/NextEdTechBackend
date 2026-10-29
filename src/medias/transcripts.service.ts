@@ -20,6 +20,8 @@ export interface Transcript {
   language: string | null;
   segments: TranscriptSegment[];
   error: string | null;
+  /** When a teacher last corrected the text; null for the untouched generated version. */
+  editedAt: string | null;
 }
 
 interface TranscribableMedia {
@@ -65,6 +67,7 @@ export class TranscriptsService implements OnModuleInit {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
+    await this.sql`ALTER TABLE media_transcripts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`;
   }
 
   static supports(media: TranscribableMedia): boolean {
@@ -82,7 +85,8 @@ export class TranscriptsService implements OnModuleInit {
     }
 
     const [row] = await this.sql`
-      SELECT status, source, language, segments, error FROM media_transcripts WHERE media_id = ${media.id}
+      SELECT status, source, language, segments, error, edited_at AS "editedAt"
+      FROM media_transcripts WHERE media_id = ${media.id}
     `;
     // No row yet, or a job that was interrupted by a server restart.
     if (!row || (row.status === 'PROCESSING' && !this.inFlight.has(media.id))) {
@@ -90,6 +94,20 @@ export class TranscriptsService implements OnModuleInit {
       return empty('PROCESSING');
     }
     return row as Transcript;
+  }
+
+  /**
+   * Saves a teacher's corrected text (filler words removed, misheard words fixed).
+   * Returns null when there is no finished transcript to edit. Regenerating discards the edits.
+   */
+  async saveEdits(mediaId: string, segments: TranscriptSegment[]): Promise<Transcript | null> {
+    const [row] = await this.sql`
+      UPDATE media_transcripts
+      SET segments = ${JSON.stringify(segments)}::jsonb, edited_at = NOW(), updated_at = NOW()
+      WHERE media_id = ${mediaId} AND status = 'READY'
+      RETURNING status, source, language, segments, error, edited_at AS "editedAt"
+    `;
+    return (row as Transcript | undefined) ?? null;
   }
 
   /** Kicks off (or restarts) transcript generation in the background. */
@@ -117,7 +135,7 @@ export class TranscriptsService implements OnModuleInit {
       if (captions) {
         const segments = parseSubtitles(await readText(captions));
         if (segments.length) {
-          await this.save(media.id, { status: 'READY', source: 'CAPTIONS', language: null, segments, error: null });
+          await this.save(media.id, { status: 'READY', source: 'CAPTIONS', language: null, segments, error: null, editedAt: null });
           return;
         }
       }
@@ -125,7 +143,7 @@ export class TranscriptsService implements OnModuleInit {
       if (!video) throw new UnavailableError('This lesson has no video or captions to transcribe.');
       const { segments, language } = await this.transcribeVideo(video);
       if (!segments.length) throw new UnavailableError('No speech was detected in this video.');
-      await this.save(media.id, { status: 'READY', source: 'SPEECH_TO_TEXT', language, segments, error: null });
+      await this.save(media.id, { status: 'READY', source: 'SPEECH_TO_TEXT', language, segments, error: null, editedAt: null });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const status = error instanceof UnavailableError ? 'UNAVAILABLE' : 'FAILED';
@@ -165,6 +183,7 @@ export class TranscriptsService implements OnModuleInit {
               language: ready.language,
               segments,
               error: null,
+              editedAt: null,
             };
           }
 
@@ -257,11 +276,11 @@ export class TranscriptsService implements OnModuleInit {
 
   private async save(mediaId: string, t: Transcript): Promise<void> {
     await this.sql`
-      INSERT INTO media_transcripts (media_id, status, source, language, segments, error, updated_at)
-      VALUES (${mediaId}, ${t.status}, ${t.source}, ${t.language}, ${JSON.stringify(t.segments)}::jsonb, ${t.error}, NOW())
+      INSERT INTO media_transcripts (media_id, status, source, language, segments, error, edited_at, updated_at)
+      VALUES (${mediaId}, ${t.status}, ${t.source}, ${t.language}, ${JSON.stringify(t.segments)}::jsonb, ${t.error}, ${t.editedAt}, NOW())
       ON CONFLICT (media_id) DO UPDATE SET
         status = EXCLUDED.status, source = EXCLUDED.source, language = EXCLUDED.language,
-        segments = EXCLUDED.segments, error = EXCLUDED.error, updated_at = NOW()
+        segments = EXCLUDED.segments, error = EXCLUDED.error, edited_at = EXCLUDED.edited_at, updated_at = NOW()
     `;
   }
 }
@@ -269,7 +288,7 @@ export class TranscriptsService implements OnModuleInit {
 class FatalError extends Error {}
 
 function empty(status: TranscriptStatus, error: string | null = null): Transcript {
-  return { status, source: null, language: null, segments: [], error };
+  return { status, source: null, language: null, segments: [], error, editedAt: null };
 }
 
 async function readText(location: string): Promise<string> {

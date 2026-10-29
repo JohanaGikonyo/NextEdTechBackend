@@ -104,3 +104,31 @@ export function segmentsFromWhisper(result: WhisperResult, offset: number, chunk
   const text = result.text?.trim();
   return text ? [{ start: offset, end: offset + chunkDuration, text }] : [];
 }
+
+const MAX_EDITED_SEGMENTS = 20_000;
+const MAX_SEGMENT_TEXT = 2_000;
+
+/**
+ * Validates a transcript sent back by the editor: every line keeps a valid
+ * time range, whitespace is tidied, lines emptied by the teacher are dropped.
+ * Throws with a readable message when the input can't be saved.
+ */
+export function cleanEditedSegments(input: unknown): TranscriptSegment[] {
+  if (!Array.isArray(input)) throw new Error('Send the transcript as a list of lines');
+  if (input.length > MAX_EDITED_SEGMENTS) throw new Error(`A transcript can have at most ${MAX_EDITED_SEGMENTS} lines`);
+
+  const segments: TranscriptSegment[] = [];
+  for (const item of input) {
+    const { start, end, text } = (item ?? {}) as Record<string, unknown>;
+    if (typeof start !== 'number' || typeof end !== 'number' || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) {
+      throw new Error('Every line needs a valid start and end time');
+    }
+    if (typeof text !== 'string') throw new Error('Every line needs text');
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (clean.length > MAX_SEGMENT_TEXT) throw new Error(`A line can be at most ${MAX_SEGMENT_TEXT} characters`);
+    if (clean) segments.push({ start, end, text: clean });
+  }
+
+  if (!segments.length) throw new Error('The transcript has no text left. Keep at least one line.');
+  return segments.sort((a, b) => a.start - b.start);
+}

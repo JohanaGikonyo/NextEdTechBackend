@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubtitles, segmentsFromWhisper } from './transcript-format.js';
+import { cleanEditedSegments, parseSubtitles, segmentsFromWhisper } from './transcript-format.js';
 
 describe('parseSubtitles', () => {
   it('parses WebVTT with headers, cue ids, tags and hour-less timings', () => {
@@ -43,5 +43,28 @@ describe('segmentsFromWhisper', () => {
       { start: 10, end: 11.5, text: 'Hi all.' },
       { start: 12, end: 13.5, text: 'Next part' },
     ]);
+  });
+});
+
+describe('cleanEditedSegments', () => {
+  it('tidies whitespace, drops emptied lines and keeps the timeline ordered', () => {
+    expect(
+      cleanEditedSegments([
+        { start: 4, end: 6, text: '  so  we\nstart here ' },
+        { start: 2, end: 4, text: '   ' },
+        { start: 0, end: 2, text: 'Welcome to NextEdTech.' },
+      ]),
+    ).toEqual([
+      { start: 0, end: 2, text: 'Welcome to NextEdTech.' },
+      { start: 4, end: 6, text: 'so we start here' },
+    ]);
+  });
+
+  it('rejects bad input with a readable message', () => {
+    expect(() => cleanEditedSegments('nope')).toThrow('list of lines');
+    expect(() => cleanEditedSegments([{ start: 3, end: 1, text: 'x' }])).toThrow('valid start and end');
+    expect(() => cleanEditedSegments([{ start: 0, end: 1, text: 42 }])).toThrow('needs text');
+    expect(() => cleanEditedSegments([{ start: 0, end: 1, text: 'x'.repeat(2001) }])).toThrow('at most 2000');
+    expect(() => cleanEditedSegments([{ start: 0, end: 1, text: ' ' }])).toThrow('no text left');
   });
 });

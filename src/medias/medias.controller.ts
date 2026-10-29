@@ -4,6 +4,7 @@ import { CloudflareStorageService } from './cloudflare-storage.service.js';
 import { MediasService } from './medias.service.js';
 import type { CreateMediaInput, MediaType } from './medias.service.js';
 import { PackageContentService } from './package-content.service.js';
+import { cleanEditedSegments, type TranscriptSegment } from './transcript-format.js';
 import { TranscriptsService } from './transcripts.service.js';
 
 const COVER_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -87,6 +88,20 @@ export class MediasController {
   @Get(':id/transcript')
   async transcript(@Param('id') id: string) {
     return this.transcripts.get(await this.findMediaOrThrow(id));
+  }
+
+  @Put(':id/transcript')
+  async editTranscript(@Param('id') id: string, @Body() input: { segments?: unknown }) {
+    await this.findMediaOrThrow(id);
+    let segments: TranscriptSegment[];
+    try {
+      segments = cleanEditedSegments(input?.segments);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+    const saved = await this.transcripts.saveEdits(id, segments);
+    if (!saved) throw new BadRequestException("The transcript isn't ready to edit yet");
+    return saved;
   }
 
   @Post(':id/transcript/regenerate')
