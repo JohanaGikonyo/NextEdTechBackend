@@ -2,10 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { cors } from 'hono/cors';
 import type { Context, Next } from 'hono';
 import { AppModule } from './app.module.js';
-import { CoursesService } from './courses/courses.service.js';
+import { initializeDatabase as initializeSchema, NEON_CONNECTION } from './database/database.module.js';
 import { HonoAdapter } from './hono-adapter.js';
-import { MediasService } from './medias/medias.service.js';
-import { TranscriptsService } from './medias/transcripts.service.js';
+import type { NeonQueryFunction } from '@neondatabase/serverless';
 
 const allowedOrigins = new Set([
   'https://nextedtechfrontend.johanagikonyo552.workers.dev',
@@ -23,15 +22,23 @@ honoApp.use(
     allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 );
-honoApp.use('*', async (_context: Context, next: Next) => {
-  databaseReady ??= Promise.all([
-    app.get(MediasService).initialize(),
-    app.get(CoursesService).initialize(),
-    app.get(TranscriptsService).initialize(),
-  ]).then(() => undefined);
+const ensureDatabase = async (_context: Context, next: Next) => {
+  databaseReady ??= (async () => {
+  const sql = app.get<NeonQueryFunction<false, false>>(NEON_CONNECTION, { strict: false });
+  await initializeSchema(sql);
+  })();
+  try {
   await databaseReady;
   return next();
-});
+  } catch (error) {
+  console.error('Database initialization failed:', error);
+  return _context.json({ error: 'Database initialization failed' }, 503);
+  }
+};
+honoApp.use('/courses', ensureDatabase);
+honoApp.use('/courses/*', ensureDatabase);
+honoApp.use('/medias', ensureDatabase);
+honoApp.use('/medias/*', ensureDatabase);
 await app.init();
 
 export default honoApp;

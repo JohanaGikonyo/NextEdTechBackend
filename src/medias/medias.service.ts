@@ -24,7 +24,7 @@ export class MediasService {
 	constructor(
 		@Inject(NEON_CONNECTION)
 		private readonly sql: NeonQueryFunction<false, false>,
-		private readonly config: ConfigService,
+		@Inject(ConfigService) private readonly config: ConfigService,
 	) {}
 
 	async initialize(): Promise<void> {

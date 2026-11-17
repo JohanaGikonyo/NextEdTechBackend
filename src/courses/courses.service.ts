@@ -9,7 +9,7 @@ type QuestionInput = { prompt: string; options: string[]; answerIndex: number };
 export class CoursesService {
   constructor(
     @Inject(NEON_CONNECTION) private readonly sql: NeonQueryFunction<false, false>,
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   async initialize() {

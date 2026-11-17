@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post } from '@nestjs/common';
 import { CoursesService } from './courses.service.js';
 
 @Controller('courses')
 export class CoursesController {
-  constructor(private readonly courses: CoursesService) {}
+  constructor(@Inject(CoursesService) private readonly courses: CoursesService) {}
   @Get() findAll() { return this.courses.findAll(); }
   @Get(':id') findOne(@Param('id') id: string) { return this.courses.findOne(id); }
   @Post() create(@Body() body: { title: string; description?: string }) { return this.courses.create(body); }

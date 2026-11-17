@@ -50,9 +50,9 @@ export class TranscriptsService {
   constructor(
     @Inject(NEON_CONNECTION)
     private readonly sql: NeonQueryFunction<false, false>,
-    private readonly config: ConfigService,
-    private readonly packages: PackageContentService,
-    private readonly storage: CloudflareStorageService,
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(PackageContentService) private readonly packages: PackageContentService,
+    @Inject(CloudflareStorageService) private readonly storage: CloudflareStorageService,
   ) {}
 
   async initialize(): Promise<void> {

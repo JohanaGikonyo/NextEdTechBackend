@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { unzipSync } from 'fflate';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -35,8 +35,8 @@ export class PackageContentService {
   >();
 
   constructor(
-    private readonly config: ConfigService,
-    private readonly storage: CloudflareStorageService,
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(CloudflareStorageService) private readonly storage: CloudflareStorageService,
   ) {
     this.cacheRoot = resolve(
       this.config.get<string>('PACKAGE_CACHE_DIR') ?? join(tmpdir(), 'nextedtech-packages'),

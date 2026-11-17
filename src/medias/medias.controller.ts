@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Logger, NotFoundException, Param, Patch, Post, Put, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Logger, NotFoundException, Param, Patch, Post, Put, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CloudflareStorageService } from './cloudflare-storage.service.js';
 import { MediasService } from './medias.service.js';
@@ -40,10 +40,10 @@ export class MediasController {
   private readonly logger = new Logger(MediasController.name);
 
   constructor(
-    private readonly mediasService: MediasService,
-    private readonly storageService: CloudflareStorageService,
-    private readonly packageContent: PackageContentService,
-    private readonly transcripts: TranscriptsService,
+    @Inject(MediasService) private readonly mediasService: MediasService,
+    @Inject(CloudflareStorageService) private readonly storageService: CloudflareStorageService,
+    @Inject(PackageContentService) private readonly packageContent: PackageContentService,
+    @Inject(TranscriptsService) private readonly transcripts: TranscriptsService,
   ) {}
 
   @Post('upload-url')
