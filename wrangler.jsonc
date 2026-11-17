@@ -3,7 +3,7 @@
   "name": "nextedtechbackend",
   "main": "src/main.ts",
   "compatibility_date": "2026-11-17",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "alias": {
     // NestJS dynamically imports @nestjs/microservices but it's not needed on Workers.
     // Alias it to a no-op module so esbuild doesn't fail.
