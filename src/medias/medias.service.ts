@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { ConfigService } from '@nestjs/config';
 import { NEON_CONNECTION } from '../database/database.module.js';
@@ -20,14 +20,14 @@ export interface CreateMediaInput {
 }
 
 @Injectable()
-export class MediasService implements OnModuleInit {
+export class MediasService {
 	constructor(
 		@Inject(NEON_CONNECTION)
 		private readonly sql: NeonQueryFunction<false, false>,
 		private readonly config: ConfigService,
 	) {}
 
-	async onModuleInit(): Promise<void> {
+	async initialize(): Promise<void> {
 		await this.sql`
 			CREATE TABLE IF NOT EXISTS media (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

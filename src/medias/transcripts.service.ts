@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 import ffmpegPath from 'ffmpeg-static';
@@ -43,7 +43,7 @@ class UnavailableError extends Error {}
  * audio through Whisper on Cloudflare Workers AI. Results are stored in the DB.
  */
 @Injectable()
-export class TranscriptsService implements OnModuleInit {
+export class TranscriptsService {
   private readonly logger = new Logger(TranscriptsService.name);
   private readonly inFlight = new Map<string, Promise<void>>();
 
@@ -55,7 +55,7 @@ export class TranscriptsService implements OnModuleInit {
     private readonly storage: CloudflareStorageService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  async initialize(): Promise<void> {
     await this.sql`
       CREATE TABLE IF NOT EXISTS media_transcripts (
         media_id UUID PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE,

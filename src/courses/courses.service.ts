@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { NEON_CONNECTION } from '../database/database.module.js';
@@ -6,13 +6,13 @@ import { NEON_CONNECTION } from '../database/database.module.js';
 type QuestionInput = { prompt: string; options: string[]; answerIndex: number };
 
 @Injectable()
-export class CoursesService implements OnModuleInit {
+export class CoursesService {
   constructor(
     @Inject(NEON_CONNECTION) private readonly sql: NeonQueryFunction<false, false>,
     private readonly config: ConfigService,
   ) {}
 
-  async onModuleInit() {
+  async initialize() {
     await this.sql`CREATE TABLE IF NOT EXISTS courses (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'DRAFT', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
