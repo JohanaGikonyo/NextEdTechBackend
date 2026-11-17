@@ -1,14 +1,23 @@
 import { NestFactory } from '@nestjs/core';
-import type { NestExpressApplication } from '@nestjs/platform-express';
+import { cors } from 'hono/cors';
 import { AppModule } from './app.module.js';
+import { HonoAdapter } from './hono-adapter.js';
 
-async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // Edited transcripts of long lessons are larger than Express's 100 KB default.
-  app.useBodyParser('json', { limit: '5mb' });
-  app.enableCors({ origin: true });
-  // Lets Render stop the service cleanly (closes connections on SIGTERM).
-  app.enableShutdownHooks();
-  await app.listen(process.env.PORT ?? 3002);
-}
-await bootstrap();
+const allowedOrigins = new Set([
+  'https://nextedtechfrontend.johanagikonyo552.workers.dev',
+  'http://localhost:3000',
+]);
+
+const app = await NestFactory.create(AppModule, new HonoAdapter());
+const honoApp = app.getHttpAdapter().getInstance();
+honoApp.use(
+  '*',
+  cors({
+    origin: (origin) => (allowedOrigins.has(origin) ? origin : ''),
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  }),
+);
+await app.init();
+
+export default honoApp;

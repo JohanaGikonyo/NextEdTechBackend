@@ -1,7 +1,26 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "nextedtechbackend-test",
-  "main": "dist/main.js",
+  "name": "nextedtechbackend",
+  "main": "src/main.ts",
   "compatibility_date": "2026-11-17",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": {
+    // NestJS dynamically imports @nestjs/microservices but it's not needed on Workers.
+    // Alias it to a no-op module so esbuild doesn't fail.
+    "@nestjs/microservices": "./src/noop-module.js",
+    "@nestjs/microservices/microservices-module.js": "./src/noop-module.js",
+    // @nestjs/websockets also pulls in Node-only deps
+    "@nestjs/websockets": "./src/noop-module.js",
+    "@nestjs/websockets/socket-module.js": "./src/noop-module.js",
+    // Express is not available on Workers — we use Hono instead.
+    // Aliasing express to a no-op prevents Node.js built-in imports (child_process,
+    // net, etc.) from being pulled into the bundle.
+    "@nestjs/platform-express": "./src/noop-module.js",
+    "express": "./src/noop-module.js",
+    "class-validator": "./src/noop-module.js",
+    "class-transformer": "./src/noop-module.js"
+  },
+  "observability": {
+    "enabled": true
+  }
 }
