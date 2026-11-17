@@ -20,6 +20,7 @@ export type PackageDescription =
   | { kind: 'HTML'; launch: string };
 
 const READY_MARKER = '.extracted';
+type PackageEntries = Record<string, Uint8Array>;
 
 /**
  * Unzips H5P / SCORM packages stored in R2 into a local cache so their
@@ -29,6 +30,7 @@ const READY_MARKER = '.extracted';
 export class PackageContentService {
   private readonly cacheRoot: string;
   private readonly inFlight = new Map<string, Promise<string>>();
+  private readonly entryCache = new Map<string, Promise<PackageEntries>>();
   private readonly embedCache = new Map<
     string,
     { value: { kind: 'H5P_COM'; video: string | null; image: string | null }; expires: number }
@@ -45,9 +47,78 @@ export class PackageContentService {
 
   /** How to launch the package, plus its main video (used for the thumbnail). */
   async describe(media: PackageMedia): Promise<PackageDescription & { video: string | null }> {
-    const dir = await this.ensureExtracted(media);
-    const launch = await this.describeLaunch(media, dir);
-    return { ...launch, video: await findMainVideo(media.type, dir) };
+    const entries = await this.ensureEntries(media);
+    const launch = this.describeLaunchEntries(media, entries);
+    return { ...launch, video: findMainVideoEntries(media.type, entries) };
+  }
+
+  /** Reads a package asset without relying on a local filesystem. */
+  async readPackageFile(media: PackageMedia, relativePath: string): Promise<Uint8Array> {
+    const normalized = relativePath.replace(/^\/+/, '');
+    if (!normalized || normalized.split('/').some((part) => part === '..' || part === '.')) {
+      throw new BadRequestException('Invalid path');
+    }
+
+    const entries = await this.ensureEntries(media);
+    const file = entries[normalized];
+    if (!file) throw new NotFoundException(`${relativePath} is not in this package`);
+    return file;
+  }
+
+  private async ensureEntries(media: PackageMedia): Promise<PackageEntries> {
+    if (media.provider !== 'CLOUDFLARE_R2' || (media.type !== 'H5P' && media.type !== 'SCORM')) {
+      throw new BadRequestException('Only H5P and SCORM packages stored in R2 can be played');
+    }
+
+    let pending = this.entryCache.get(media.id);
+    if (!pending) {
+      pending = this.loadEntries(media).catch((error) => {
+        this.entryCache.delete(media.id);
+        throw error;
+      });
+      this.entryCache.set(media.id, pending);
+    }
+    return pending;
+  }
+
+  private async loadEntries(media: PackageMedia): Promise<PackageEntries> {
+    const archive = await this.storage.downloadObject(media.provider_id);
+    return unzipSync(archive);
+  }
+
+  private describeLaunchEntries(media: PackageMedia, entries: PackageEntries): PackageDescription {
+    if (media.type === 'H5P') {
+      const h5pJson = decodeEntry(entries['h5p.json']);
+      if (!h5pJson) {
+        throw new BadRequestException('This file is not a valid .h5p package (h5p.json missing)');
+      }
+      const parsed = JSON.parse(h5pJson) as { title?: string; mainLibrary?: string };
+      return { kind: 'H5P', title: parsed.title ?? null, mainLibrary: parsed.mainLibrary ?? null };
+    }
+
+    const roots = new Set<string>(['']);
+    for (const name of Object.keys(entries)) {
+      const slash = name.indexOf('/');
+      if (slash > 0) roots.add(`${name.slice(0, slash)}/`);
+    }
+    for (const root of roots) {
+      const manifest = decodeEntry(entries[`${root}imsmanifest.xml`]);
+      if (manifest) {
+        const { version, launch } = parseScormManifest(manifest);
+        return { kind: 'SCORM', version, launch: `${root}${launch}` };
+      }
+    }
+
+    for (const root of roots) {
+      for (const page of ['index.html', 'index_scorm.html', 'story.html']) {
+        if (entries[`${root}${page}`]) return { kind: 'HTML', launch: `${root}${page}` };
+      }
+    }
+
+    throw new BadRequestException(
+      'This ZIP has neither imsmanifest.xml nor index.html. ' +
+        'Publish it from Captivate as SCORM 1.2/2004 or HTML5.',
+    );
   }
 
   private async describeLaunch(media: PackageMedia, dir: string): Promise<PackageDescription> {
@@ -127,6 +198,7 @@ export class PackageContentService {
   /** Forgets everything cached for a lesson (unpacked files, embed lookups). */
   async evict(mediaId: string): Promise<void> {
     this.embedCache.delete(mediaId);
+    this.entryCache.delete(mediaId);
     await this.inFlight.get(mediaId)?.catch(() => undefined);
     await rm(join(this.cacheRoot, mediaId), { recursive: true, force: true });
   }
@@ -186,6 +258,33 @@ export class PackageContentService {
 const VIDEO_FILE = /\.(mp4|m4v|webm|mov)$/i;
 const CAPTIONS_FILE = /\.(vtt|srt)$/i;
 const isRemote = (value: string) => /^[a-z]+:\/\//i.test(value);
+
+function decodeEntry(entry: Uint8Array | undefined): string | null {
+  return entry ? new TextDecoder().decode(entry) : null;
+}
+
+function findMainVideoEntries(type: string, entries: PackageEntries): string | null {
+  if (type === 'H5P') {
+    const content = decodeEntry(entries['content/content.json']);
+    if (!content) return null;
+    const found: string[] = [];
+    const walk = (value: unknown): void => {
+      if (typeof value === 'string') {
+        if (VIDEO_FILE.test(value) && !isRemote(value)) found.push(value);
+      } else if (value && typeof value === 'object') {
+        Object.values(value).forEach(walk);
+      }
+    };
+    walk(JSON.parse(content));
+    return found[0] ? `content/${found[0]}` : null;
+  }
+
+  const candidates = Object.keys(entries).filter((name) => VIDEO_FILE.test(name));
+  return candidates.reduce<string | null>((largest, name) => {
+    if (!largest || entries[name].byteLength > entries[largest].byteLength) return name;
+    return largest;
+  }, null);
+}
 
 /**
  * H5P: the first local captions track referenced by content.json.

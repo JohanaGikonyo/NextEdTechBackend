@@ -27,6 +27,32 @@ function normalizeH5pComEmbedUrl(value: string): string {
   return path.endsWith('/embed') ? `${url.origin}${path}` : `${url.origin}${path}/embed`;
 }
 
+function packageContentType(path: string): string {
+  const extension = path.toLowerCase().split('.').pop();
+  const types: Record<string, string> = {
+    css: 'text/css; charset=utf-8',
+    csv: 'text/csv; charset=utf-8',
+    htm: 'text/html; charset=utf-8',
+    html: 'text/html; charset=utf-8',
+    js: 'text/javascript; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    mp4: 'video/mp4',
+    m4v: 'video/x-m4v',
+    mov: 'video/quicktime',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    vtt: 'text/vtt; charset=utf-8',
+    webm: 'video/webm',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    xml: 'application/xml; charset=utf-8',
+  };
+  return types[extension ?? ''] ?? 'application/octet-stream';
+}
+
 interface UploadRequest {
   title: string;
   type: MediaType;
@@ -257,18 +283,20 @@ export class MediasController {
     return this.packageContent.describe(media);
   }
 
-  @Get(':id/content/*path')
+  @Get(':id/content/:path{.+}')
   async packageFile(
     @Param('id') id: string,
     @Param('path') path: string | string[],
     @Res() res: Response,
   ) {
     const relativePath = Array.isArray(path) ? path.join('/') : path;
-    const filePath = await this.packageContent.resolveFile(
+    const file = await this.packageContent.readPackageFile(
       await this.findMediaOrThrow(id),
       relativePath,
     );
-    res.sendFile(filePath, { maxAge: '1h' });
+    res.setHeader('Content-Type', packageContentType(relativePath));
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(file);
   }
 
   private async findMediaOrThrow(id: string) {
@@ -276,6 +304,7 @@ export class MediasController {
     if (!media) {
       throw new NotFoundException('Media not found');
     }
+
     return media as unknown as { id: string; type: string; provider: string; provider_id: string };
   }
 
