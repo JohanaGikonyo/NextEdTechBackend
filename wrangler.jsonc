@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nextedtechbackend-test",
+  "main": "dist/main.js",
+  "compatibility_date": "2026-11-17",
+  "compatibility_flags": ["nodejs_compat"]
+}
