@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
+import { neon } from '@neondatabase/serverless';
 import { cors } from 'hono/cors';
 import type { Context, Next } from 'hono';
 import { AppModule } from './app.module.js';
-import { initializeDatabase as initializeSchema, NEON_CONNECTION } from './database/database.module.js';
+import { initializeDatabase as initializeSchema } from './database/database.module.js';
 import { HonoAdapter } from './hono-adapter.js';
-import type { NeonQueryFunction } from '@neondatabase/serverless';
 
 const allowedOrigins = new Set([
   'https://nextedtechfrontend.johanagikonyo552.workers.dev',
@@ -24,7 +24,9 @@ honoApp.use(
 );
 const ensureDatabase = async (_context: Context, next: Next) => {
   databaseReady ??= (async () => {
-  const sql = app.get<NeonQueryFunction<false, false>>(NEON_CONNECTION, { strict: false });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is not configured');
+  const sql = neon(databaseUrl);
   await initializeSchema(sql);
   })();
   try {
