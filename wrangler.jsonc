@@ -18,7 +18,8 @@
     "@nestjs/platform-express": "./src/noop-module.js",
     "express": "./src/noop-module.js",
     "class-validator": "./src/noop-module.js",
-    "class-transformer": "./src/noop-module.js"
+    "class-transformer": "./src/noop-module.js",
+    "ffmpeg-static": "./src/noop-module.js"
   },
   "observability": {
     "enabled": true
